@@ -83,7 +83,7 @@ fastapi-gestion-tareas/
 
 2. Crear y activar el entorno virtual:
    ```bash
-   python -m venv .venv
+   python3 -m venv .venv
    source .venv/bin/activate      # Linux / Mac
    .venv\Scripts\activate         # Windows
    ```
