@@ -1,58 +1,66 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, select
 
-from app.almacenamiento import siguiente_id_usuario, tareas_db, usuarios_db
-from app.modelos.usuario import UsuarioConTareas, UsuarioCreate, UsuarioResponse
+from app.database import get_session
+from app.modelos.usuario import Usuario, UsuarioConTareas, UsuarioCreate, UsuarioResponse
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
 
 @router.post("/", response_model=UsuarioResponse, status_code=201)
-def crear_usuario(usuario: UsuarioCreate):
-    correo_existente = any(u["correo"] == usuario.correo for u in usuarios_db.values())
+def crear_usuario(usuario: UsuarioCreate, session: Session = Depends(get_session)):
+    correo_existente = session.exec(
+        select(Usuario).where(Usuario.correo == usuario.correo)
+    ).first()
     if correo_existente:
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
-    nuevo_id = siguiente_id_usuario()
-    nuevo_usuario = {"id": nuevo_id, **usuario.model_dump()}
-    usuarios_db[nuevo_id] = nuevo_usuario
+    nuevo_usuario = Usuario.model_validate(usuario)
+    session.add(nuevo_usuario)
+    session.commit()
+    session.refresh(nuevo_usuario)
     return nuevo_usuario
 
 
 @router.get("/", response_model=list[UsuarioResponse])
-def listar_usuarios():
-    return list(usuarios_db.values())
+def listar_usuarios(session: Session = Depends(get_session)):
+    return session.exec(select(Usuario)).all()
 
 
 @router.get("/{usuario_id}", response_model=UsuarioConTareas)
-def obtener_usuario(usuario_id: int):
-    usuario = usuarios_db.get(usuario_id)
+def obtener_usuario(usuario_id: int, session: Session = Depends(get_session)):
+    usuario = session.get(Usuario, usuario_id)
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    tareas_usuario = [t for t in tareas_db.values() if t["usuario_id"] == usuario_id]
-    return {**usuario, "tareas": tareas_usuario}
+    return usuario
 
 
 @router.put("/{usuario_id}", response_model=UsuarioResponse)
-def editar_usuario(usuario_id: int, datos: UsuarioCreate):
-    usuario = usuarios_db.get(usuario_id)
+def editar_usuario(
+    usuario_id: int, datos: UsuarioCreate, session: Session = Depends(get_session)
+):
+    usuario = session.get(Usuario, usuario_id)
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    correo_en_uso = any(
-        u["correo"] == datos.correo and u["id"] != usuario_id
-        for u in usuarios_db.values()
-    )
+    correo_en_uso = session.exec(
+        select(Usuario).where(Usuario.correo == datos.correo, Usuario.id != usuario_id)
+    ).first()
     if correo_en_uso:
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
-    usuario.update(datos.model_dump())
+    usuario.nombre = datos.nombre
+    usuario.correo = datos.correo
+    session.add(usuario)
+    session.commit()
+    session.refresh(usuario)
     return usuario
 
 
 @router.delete("/{usuario_id}", status_code=204)
-def eliminar_usuario(usuario_id: int):
-    if usuario_id not in usuarios_db:
+def eliminar_usuario(usuario_id: int, session: Session = Depends(get_session)):
+    usuario = session.get(Usuario, usuario_id)
+    if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    del usuarios_db[usuario_id]
+    session.delete(usuario)
+    session.commit()
