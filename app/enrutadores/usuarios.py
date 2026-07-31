@@ -31,3 +31,28 @@ def obtener_usuario(usuario_id: int):
 
     tareas_usuario = [t for t in tareas_db.values() if t["usuario_id"] == usuario_id]
     return {**usuario, "tareas": tareas_usuario}
+
+
+@router.put("/{usuario_id}", response_model=UsuarioResponse)
+def editar_usuario(usuario_id: int, datos: UsuarioCreate):
+    usuario = usuarios_db.get(usuario_id)
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    correo_en_uso = any(
+        u["correo"] == datos.correo and u["id"] != usuario_id
+        for u in usuarios_db.values()
+    )
+    if correo_en_uso:
+        raise HTTPException(status_code=400, detail="El correo ya está registrado")
+
+    usuario.update(datos.model_dump())
+    return usuario
+
+
+@router.delete("/{usuario_id}", status_code=204)
+def eliminar_usuario(usuario_id: int):
+    if usuario_id not in usuarios_db:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    del usuarios_db[usuario_id]

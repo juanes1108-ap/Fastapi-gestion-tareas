@@ -20,3 +20,32 @@ def crear_tarea(tarea: TareaCreate):
 @router.get("/", response_model=list[TareaResponse])
 def listar_tareas():
     return list(tareas_db.values())
+
+
+@router.get("/{tarea_id}", response_model=TareaResponse)
+def obtener_tarea(tarea_id: int):
+    tarea = tareas_db.get(tarea_id)
+    if not tarea:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+    return tarea
+
+
+@router.put("/{tarea_id}", response_model=TareaResponse)
+def editar_tarea(tarea_id: int, datos: TareaCreate):
+    tarea = tareas_db.get(tarea_id)
+    if not tarea:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    if datos.usuario_id not in usuarios_db:
+        raise HTTPException(status_code=404, detail="El usuario indicado no existe")
+
+    tarea.update(datos.model_dump())
+    return tarea
+
+
+@router.delete("/{tarea_id}", status_code=204)
+def eliminar_tarea(tarea_id: int):
+    if tarea_id not in tareas_db:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    del tareas_db[tarea_id]

@@ -23,6 +23,32 @@ def crear_actividad(tarea_id: int, actividad: ActividadCreate):
     return nueva_actividad
 
 
+@router.get("/actividades/", response_model=list[ActividadResponse])
+def listar_actividades():
+    return list(actividades_db.values())
+
+
+@router.get("/actividades/{actividad_id}", response_model=ActividadResponse)
+def obtener_actividad(actividad_id: int):
+    actividad = actividades_db.get(actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    return actividad
+
+
+@router.put("/actividades/{actividad_id}", response_model=ActividadResponse)
+def editar_actividad(actividad_id: int, datos: ActividadCreate):
+    actividad = actividades_db.get(actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    if datos.tarea_id not in tareas_db:
+        raise HTTPException(status_code=404, detail="La tarea indicada no existe")
+
+    actividad.update(datos.model_dump())
+    return actividad
+
+
 @router.patch("/actividades/{actividad_id}", response_model=ActividadResponse)
 def actualizar_estado_actividad(actividad_id: int, cambio: ActividadUpdate):
     actividad = actividades_db.get(actividad_id)
@@ -31,3 +57,11 @@ def actualizar_estado_actividad(actividad_id: int, cambio: ActividadUpdate):
 
     actividad["completada"] = cambio.completada
     return actividad
+
+
+@router.delete("/actividades/{actividad_id}", status_code=204)
+def eliminar_actividad(actividad_id: int):
+    if actividad_id not in actividades_db:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    del actividades_db[actividad_id]
